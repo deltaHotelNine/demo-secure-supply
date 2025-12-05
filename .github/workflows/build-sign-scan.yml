@@ -95,6 +95,8 @@ jobs:
           chmod 600 cosign.key
 
       - name: Sign the image
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           if [ -z "${IMAGE_REF_DIGEST}" ]; then
             echo "ERROR: IMAGE_REF_DIGEST is not set"
