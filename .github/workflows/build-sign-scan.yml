@@ -102,7 +102,7 @@ jobs:
             echo "ERROR: IMAGE_REF_DIGEST is not set"
             exit 1
           fi
-          cosign sign --key cosign.key "${IMAGE_REF_DIGEST}"
+          printf 'y' | cosign sign --key cosign.key "${IMAGE_REF_DIGEST}"
 
       - name: Workflow summary
         run: |
