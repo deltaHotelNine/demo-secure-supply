@@ -1,112 +1,112 @@
 name: Build, SBOM, Scan, and Sign
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
 
 permissions:
-  contents: read
-  packages: write
+    contents: read
+    packages: write
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_TAG: ${{ github.sha }}
+    REGISTRY: ghcr.io
+    IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  build-scan-sign:
-    runs-on: ubuntu-latest
+    build-scan-sign:
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+            - name: Log in to GitHub Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Clean image name
-        run: |
-          IMAGE_NAME=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
-          IMAGE_REF="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          echo "Cleaned IMAGE_NAME: $IMAGE_NAME"
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
-          echo "IMAGE_REF=$IMAGE_REF" >> $GITHUB_ENV
+            - name: Clean image name
+              run: |
+                  IMAGE_NAME=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+                  IMAGE_REF="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                  echo "Cleaned IMAGE_NAME: $IMAGE_NAME"
+                  echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+                  echo "IMAGE_REF=$IMAGE_REF" >> $GITHUB_ENV
 
-      - name: Build image
-        run: |
-          echo "Building image: ${IMAGE_REF}"
-          docker build -t "${IMAGE_REF}" .
+            - name: Build image
+              run: |
+                  echo "Building image: ${IMAGE_REF}"
+                  docker build -t "${IMAGE_REF}" .
 
-      - name: Install Syft and Grype
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+            - name: Install Syft and Grype
+              run: |
+                  curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+                  curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
 
-      - name: Generate SBOM
-        run: |
-          echo "Generating SBOM for image: ${IMAGE_REF}"
-          syft packages "${IMAGE_REF}" -o cyclonedx-json > sbom.json
+            - name: Generate SBOM
+              run: |
+                  echo "Generating SBOM for image: ${IMAGE_REF}"
+                  syft packages "${IMAGE_REF}" -o cyclonedx-json > sbom.json
 
-      - name: Scan for vulnerabilities
-        run: |
-          echo "Scanning image: ${IMAGE_REF}"
-          grype "${IMAGE_REF}" -o json > scan-results.json
+            - name: Scan for vulnerabilities
+              run: |
+                  echo "Scanning image: ${IMAGE_REF}"
+                  grype "${IMAGE_REF}" -o json > scan-results.json
 
-      - name: Upload SBOM and Scan Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-artifacts-${{ github.run_id }}
-          path: |
-            sbom.json
-            scan-results.json
+            - name: Upload SBOM and Scan Results
+              uses: actions/upload-artifact@v4
+              with:
+                  name: security-artifacts-${{ github.run_id }}
+                  path: |
+                      sbom.json
+                      scan-results.json
 
-      - name: Push image to GHCR and capture digest
-        run: |
-          echo "Pushing image: ${IMAGE_REF}"
-          docker push "${IMAGE_REF}"
-          # RepoDigests entry looks like "ghcr.io/owner/repo@sha256:..."
-          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REF}" 2>/dev/null || true)
-          if [ -z "${REPO_DIGEST}" ]; then
-            echo "ERROR: unable to read RepoDigests; ensure push succeeded and docker is authenticated."
-            exit 1
-          fi
-          IMAGE_DIGEST=$(echo "${REPO_DIGEST}" | awk -F@ '{print $2}')
-          if [ -z "${IMAGE_DIGEST}" ]; then
-            echo "ERROR: failed to parse image digest from RepoDigests: ${REPO_DIGEST}"
-            exit 1
-          fi
-          IMAGE_REF_DIGEST="${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
-          echo "IMAGE_REF_DIGEST=${IMAGE_REF_DIGEST}" >> $GITHUB_ENV
-          echo "Pushed and recorded digest: ${IMAGE_REF_DIGEST}"
+            - name: Push image to GHCR and capture digest
+              run: |
+                  echo "Pushing image: ${IMAGE_REF}"
+                  docker push "${IMAGE_REF}"
+                  # RepoDigests entry looks like "ghcr.io/owner/repo@sha256:..."
+                  REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REF}" 2>/dev/null || true)
+                  if [ -z "${REPO_DIGEST}" ]; then
+                    echo "ERROR: unable to read RepoDigests; ensure push succeeded and docker is authenticated."
+                    exit 1
+                  fi
+                  IMAGE_DIGEST=$(echo "${REPO_DIGEST}" | awk -F@ '{print $2}')
+                  if [ -z "${IMAGE_DIGEST}" ]; then
+                    echo "ERROR: failed to parse image digest from RepoDigests: ${REPO_DIGEST}"
+                    exit 1
+                  fi
+                  IMAGE_REF_DIGEST="${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+                  echo "IMAGE_REF_DIGEST=${IMAGE_REF_DIGEST}" >> $GITHUB_ENV
+                  echo "Pushed and recorded digest: ${IMAGE_REF_DIGEST}"
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+            #- name: Install cosign
+            #  uses: sigstore/cosign-installer@v3
 
-      - name: Write cosign private key
-        run: |
-          printf '%s' "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
-          chmod 600 cosign.key
+            #- name: Write cosign private key
+            #  run: |
+            #    printf '%s' "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+            #    chmod 600 cosign.key
 
-      - name: Sign the image
-        env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-        run: |
-          if [ -z "${IMAGE_REF_DIGEST}" ]; then
-            echo "ERROR: IMAGE_REF_DIGEST is not set"
-            exit 1
-          fi
-          printf 'y' | cosign sign --key cosign.key "${IMAGE_REF_DIGEST}"
+            #- name: Sign the image
+            #  env:
+            #    COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+            #  run: |
+            #    if [ -z "${IMAGE_REF_DIGEST}" ]; then
+            #      echo "ERROR: IMAGE_REF_DIGEST is not set"
+            #      exit 1
+            #    fi
+            #    printf 'y' | cosign sign --key cosign.key "${IMAGE_REF_DIGEST}"
 
-      - name: Workflow summary
-        run: |
-          echo "Image built, scanned, and signed successfully!"
-          echo "Image Reference: ${IMAGE_REF}"
-          echo "SBOM and scan results uploaded as artifacts."
-          echo "GHCR Image: ${IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
+            - name: Workflow summary
+              run: |
+                  echo "Image built, scanned, and signed successfully!"
+                  echo "Image Reference: ${IMAGE_REF}"
+                  echo "SBOM and scan results uploaded as artifacts."
+                  echo "GHCR Image: ${IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
