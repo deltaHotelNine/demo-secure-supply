@@ -86,23 +86,23 @@ jobs:
                   echo "IMAGE_REF_DIGEST=${IMAGE_REF_DIGEST}" >> $GITHUB_ENV
                   echo "Pushed and recorded digest: ${IMAGE_REF_DIGEST}"
 
-            #- name: Install cosign
-            #  uses: sigstore/cosign-installer@v3
+            - name: Install cosign
+              uses: sigstore/cosign-installer@v3
 
-            #- name: Write cosign private key
-            #  run: |
-            #    printf '%s' "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
-            #    chmod 600 cosign.key
+            - name: Write cosign private key
+              run: |
+                  printf '%s' "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+                  chmod 600 cosign.key
 
-            #- name: Sign the image
-            #  env:
-            #    COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-            #  run: |
-            #    if [ -z "${IMAGE_REF_DIGEST}" ]; then
-            #      echo "ERROR: IMAGE_REF_DIGEST is not set"
-            #      exit 1
-            #    fi
-            #    printf 'y' | cosign sign --key cosign.key "${IMAGE_REF_DIGEST}"
+            - name: Sign the image
+              env:
+                  COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+              run: |
+                  if [ -z "${IMAGE_REF_DIGEST}" ]; then
+                    echo "ERROR: IMAGE_REF_DIGEST is not set"
+                    exit 1
+                  fi
+                  printf 'y' | cosign sign --key cosign.key "${IMAGE_REF_DIGEST}"
 
             - name: Workflow summary
               run: |
